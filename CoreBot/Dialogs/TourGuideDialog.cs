@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Bot.Builder;
 using Microsoft.Bot.Builder.Dialogs;
+using Microsoft.Bot.Builder.Dialogs.Choices;
 using Microsoft.Bot.Schema;
 using Microsoft.Extensions.Logging;
 using Microsoft.Recognizers.Text.DataTypes.TimexExpression;
@@ -18,6 +19,7 @@ namespace CoreBot.Dialogs
     public class TourGuideDialog : CancelAndHelpDialog
     {
         private readonly ILogger _logger;
+        private List<string> MENU_OPTIONS;
 
         public TourGuideDialog(ILogger<TourGuideDialog> logger) : base(nameof(TourGuideDialog))
         {
@@ -51,6 +53,10 @@ namespace CoreBot.Dialogs
         {
             _logger.LogDebug("SearchUserRequest", context);
 
+            MENU_OPTIONS = new List<string>();
+            MENU_OPTIONS.Add("1");
+            MENU_OPTIONS.Add("2");
+
             return await context.NextAsync(JsonConvert.SerializeObject(new { user = "value param" }));
         }
 
@@ -59,6 +65,20 @@ namespace CoreBot.Dialogs
             _logger.LogDebug("DisplayUserResult", context);
 
             var param = context.Result.ToString();
+
+
+            FoundChoice ch = (FoundChoice)context.Result;
+            if (ch.Index == -1)
+            {
+                //context.Context.Activity.Code = "FlowCancel";
+                //context.Context.Activity.Type = ActivityTypes.Message;
+                //context.Context.Activity.Text = context.Context.Activity.Text;
+                //return await context.ReplaceDialogAsync(nameof(NewDialog));
+            }
+
+            FoundChoice f = (FoundChoice)context.Result;
+
+            int itemFound = Array.IndexOf(MENU_OPTIONS.ToArray(), f.Value);
 
 
             return await context.EndDialogAsync();
