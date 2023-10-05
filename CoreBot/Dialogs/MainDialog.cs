@@ -23,7 +23,7 @@ namespace CoreBot.Dialogs
         private readonly ILogger _logger;
 
         // Dependency injection uses this constructor to instantiate MainDialog
-        public MainDialog(FlightBookingRecognizer luisRecognizer, BookingDialog bookingDialog, ILogger<MainDialog> logger)
+        public MainDialog(FlightBookingRecognizer luisRecognizer, BookingDialog bookingDialog, TourGuideDialog tourDialog, ILogger<MainDialog> logger)
             : base(nameof(MainDialog))
         {
             _luisRecognizer = luisRecognizer;
@@ -31,15 +31,13 @@ namespace CoreBot.Dialogs
 
             AddDialog(new TextPrompt(nameof(TextPrompt)));
             AddDialog(bookingDialog);
-
-            var waterfallSteps = new WaterfallStep[]
+            AddDialog(tourDialog);
+            AddDialog(new WaterfallDialog(nameof(WaterfallDialog), new WaterfallStep[]
             {
                 IntroStepAsync,
                 ActStepAsync,
                 FinalStepAsync,
-            };
-
-            AddDialog(new WaterfallDialog(nameof(WaterfallDialog), waterfallSteps));
+            }));
 
             // The initial child Dialog to run.
             InitialDialogId = nameof(WaterfallDialog);
@@ -93,7 +91,8 @@ namespace CoreBot.Dialogs
             if (!_luisRecognizer.IsConfigured)
             {
                 // LUIS is not configured, we just run the BookingDialog path with an empty BookingDetailsInstance.
-                return await stepContext.BeginDialogAsync(nameof(BookingDialog), new BookingDetails(), cancellationToken);
+                //return await stepContext.BeginDialogAsync(nameof(BookingDialog), new BookingDetails(), cancellationToken);
+                return await stepContext.BeginDialogAsync(nameof(TourGuideDialog));
             }
 
             // Call LUIS and gather any potential booking details. (Note the TurnContext has the response to the prompt.)
