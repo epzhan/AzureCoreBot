@@ -20,19 +20,21 @@ using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Identity.Client;
+using Microsoft.Extensions.Configuration;
+using CoreBot.Extensions;
+using CoreBot.Model;
 
 namespace CoreBot.Dialogs
 {
     public class TourGuideDialog : CancelAndHelpDialog
     {
-        private readonly ILogger _logger;
-        private List<string> MENU_OPTIONS;
+        private readonly IConfiguration _config;
         private const string JSON_CARD_TOUR_LIST = @"Cards\tourList.json";
         private const string JSON_CARD_TOUR_DETAIL = @"Cards\tourDetail.json";
 
-        public TourGuideDialog(ILogger<TourGuideDialog> logger) : base(nameof(TourGuideDialog))
+        public TourGuideDialog(IConfiguration configuration) : base(nameof(TourGuideDialog))
         {
-            _logger = logger;
+            _config = configuration;
 
             AddDialog(new AttachmentPrompt(nameof(AttachmentPrompt)));
             AddDialog(new WaterfallDialog(nameof(BotContextCategoryAsync), new WaterfallStep[]
@@ -40,9 +42,9 @@ namespace CoreBot.Dialogs
                 BotContextCategoryAsync
             }));
 
-            AddDialog(new WaterfallDialog(nameof(SearchUserRequest), new WaterfallStep[]
+            AddDialog(new WaterfallDialog(nameof(QueryTour), new WaterfallStep[]
             {
-                SearchUserRequest,
+                QueryTour,
                 GetUserRequest,
                 DisplayUserResult,
                 FinalStep
@@ -60,16 +62,30 @@ namespace CoreBot.Dialogs
 
         private async Task<DialogTurnResult> BotContextCategoryAsync(WaterfallStepContext context, CancellationToken cancellationToken)
         {
-            _logger.LogDebug("CategoryMappingAsync", context);
+            await context.DebugAsync($"Text {context?.Context?.Activity?.Text}", cancellationToken);
 
-            string menuItemText = context.Context?.Activity?.Text;
+            if (JsonUtil.IsValidJson(context.Options?.ToString()))
+            {
+                var jobj = JObject.Parse(context.Options?.ToString());
+                var categoryStr = JsonUtil.GetJsonValueByKey(jobj, "tourCategory");
+                var category = JsonConvert.DeserializeObject<TourCategory>(categoryStr);
 
-            return await context.BeginDialogAsync(nameof(SearchUserRequest));
+                if (category == TourCategory.List)
+                {
+                    return await context.BeginDialogAsync(nameof(ListTours), null, cancellationToken);
+                }
+                else if (category == TourCategory.Query)
+                {
+                    return await context.BeginDialogAsync(nameof(QueryTour), null, cancellationToken);
+                }
+            }
+
+            return await context.BeginDialogAsync(nameof(QueryTour));
         }
 
-        private async Task<DialogTurnResult> SearchUserRequest(WaterfallStepContext context, CancellationToken cancellationToken)
+        private async Task<DialogTurnResult> QueryTour(WaterfallStepContext context, CancellationToken cancellationToken)
         {
-            _logger.LogDebug("SearchUserRequest", context);
+            await context.DebugAsync($"Text {context?.Context?.Activity?.Text}", cancellationToken);
 
             string msg = "Please enter your question";
             var promptMessage = MessageFactory.Text(msg, msg, InputHints.ExpectingInput);
@@ -80,7 +96,7 @@ namespace CoreBot.Dialogs
         {
             if (string.IsNullOrEmpty(context.Result.ToString()))
             {
-                return await context.ReplaceDialogAsync(nameof(SearchUserRequest));
+                return await context.ReplaceDialogAsync(nameof(QueryTour));
             }
 
             return await context.NextAsync(JsonConvert.SerializeObject(new { user = context.Result.ToString() }), cancellationToken);
@@ -88,32 +104,30 @@ namespace CoreBot.Dialogs
 
         private async Task<DialogTurnResult> DisplayUserResult(WaterfallStepContext context, CancellationToken cancellationToken)
         {
-            _logger.LogDebug("DisplayUserResult", context);
+            await context.DebugAsync($"Text {context?.Context?.Activity?.Text}", cancellationToken);
 
             if (context.Result != null)
             {
-                if (context.Result is FoundChoice)
-                {
-                    FoundChoice ch = (FoundChoice)context.Result;
-                    if (ch.Index == -1)
-                    {
-                        //context.Context.Activity.Code = "FlowCancel";
-                        //context.Context.Activity.Type = ActivityTypes.Message;
-                        //context.Context.Activity.Text = context.Context.Activity.Text;
-                        //return await context.ReplaceDialogAsync(nameof(NewDialog));
-                    }
+                //if (context.Result is FoundChoice)
+                //{
+                //    FoundChoice ch = (FoundChoice)context.Result;
+                //    if (ch.Index == -1)
+                //    {
+                //        //context.Context.Activity.Code = "FlowCancel";
+                //        //context.Context.Activity.Type = ActivityTypes.Message;
+                //        //context.Context.Activity.Text = context.Context.Activity.Text;
+                //        //return await context.ReplaceDialogAsync(nameof(NewDialog));
+                //    }
 
-                    FoundChoice f = (FoundChoice)context.Result;
+                //    FoundChoice f = (FoundChoice)context.Result;
 
-                    int itemFound = Array.IndexOf(MENU_OPTIONS.ToArray(), f.Value);
+                //    int itemFound = Array.IndexOf(MENU_OPTIONS.ToArray(), f.Value);
 
-                }
-                else
+                //}
+                //else
                 {
                     JObject obj = JObject.Parse(context.Result.ToString());
                     var user = JsonUtil.GetJsonValueByKey(obj, "user");
-
-                    _logger.LogInformation($"json value - {user}");
 
                     var attachment = await ShowTourDetailCard();
                     return await context.PromptAsync(nameof(AttachmentPrompt), new PromptOptions()
@@ -129,19 +143,27 @@ namespace CoreBot.Dialogs
 
         private async Task<DialogTurnResult> ListTours(WaterfallStepContext context, CancellationToken cancellationToken)
         {
-            _logger.LogDebug("ListTours");
+            await context.DebugAsync($"Text {context?.Context?.Activity?.Text}", cancellationToken);
 
-            MENU_OPTIONS = new List<string>();
-            MENU_OPTIONS.Add("1");
-            MENU_OPTIONS.Add("2");
+            var tourAvailable = context.Options as Tours;
 
-            return await context.NextAsync(null, cancellationToken);
+            List<Attachment> tourList = new List<Attachment>();
+            foreach (var item in tourAvailable.tour)
+            {
+                tourList.Add(await ShowTourDetailCard());
+            }
+
+
+            return await context.PromptAsync(nameof(AttachmentPrompt), new PromptOptions
+            {
+                Prompt = (Activity)MessageFactory.Carousel(tourList)
+            }, cancellationToken);
 
         }
 
         private async Task<DialogTurnResult> ListTourDetail(WaterfallStepContext context, CancellationToken cancellationToken)
         {
-            _logger.LogDebug("ListTourDetail");
+            await context.DebugAsync($"Text {context?.Context?.Activity?.Text}", cancellationToken);
 
             return await context.NextAsync(null, cancellationToken);
         }

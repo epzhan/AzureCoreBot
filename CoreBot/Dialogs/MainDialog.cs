@@ -4,8 +4,11 @@
 // Generated with Bot Builder V4 SDK Template for Visual Studio CoreBot v4.18.1
 
 using CoreBot.CognitiveModels;
+using CoreBot.Extensions;
+using CoreBot.Model;
 using Microsoft.Bot.Builder;
 using Microsoft.Bot.Builder.Dialogs;
+using Microsoft.Bot.Builder.Dialogs.Choices;
 using Microsoft.Bot.Schema;
 using Microsoft.Extensions.Logging;
 using Microsoft.Recognizers.Text.DataTypes.TimexExpression;
@@ -14,6 +17,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
 
 namespace CoreBot.Dialogs
 {
@@ -30,6 +34,7 @@ namespace CoreBot.Dialogs
             _logger = logger;
 
             AddDialog(new TextPrompt(nameof(TextPrompt)));
+            AddDialog(new ChoicePrompt(nameof(ChoicePrompt)));
             AddDialog(bookingDialog);
             AddDialog(tourDialog);
             AddDialog(new WaterfallDialog(nameof(WaterfallDialog), new WaterfallStep[]
@@ -37,6 +42,12 @@ namespace CoreBot.Dialogs
                 IntroStepAsync,
                 ActStepAsync,
                 FinalStepAsync,
+            }));
+
+            AddDialog(new WaterfallDialog(nameof(TourOptions), new WaterfallStep[]
+            {
+                TourOptions,
+                ProcessTourOptions
             }));
 
             // The initial child Dialog to run.
@@ -92,7 +103,7 @@ namespace CoreBot.Dialogs
             {
                 // LUIS is not configured, we just run the BookingDialog path with an empty BookingDetailsInstance.
                 //return await stepContext.BeginDialogAsync(nameof(BookingDialog), new BookingDetails(), cancellationToken);
-                return await stepContext.BeginDialogAsync(nameof(TourGuideDialog));
+                return await stepContext.BeginDialogAsync(nameof(TourOptions));
             }
 
             // Call LUIS and gather any potential booking details. (Note the TurnContext has the response to the prompt.)
@@ -152,6 +163,49 @@ namespace CoreBot.Dialogs
             // Restart the main dialog with a different message the second time around
             var promptMessage = "What else can I do for you?";
             return await stepContext.ReplaceDialogAsync(InitialDialogId, promptMessage, cancellationToken);
+        }
+
+        private async Task<DialogTurnResult> TourOptions(WaterfallStepContext context, CancellationToken cancellationToken)
+        {
+            await context.DebugAsync($"Text {context?.Context?.Activity?.Text}", cancellationToken);
+
+            var options = new List<Choice>()
+            {
+                new Choice(){Value = "List Tours"},
+                new Choice(){Value = "Query Tour"}
+            };
+
+            return await context.PromptAsync(nameof(ChoicePrompt), new PromptOptions
+            {
+                Prompt = MessageFactory.Text("Select an option on how to proceed"),
+                Choices = options
+            }, cancellationToken);
+        }
+
+        private async Task<DialogTurnResult> ProcessTourOptions(WaterfallStepContext context, CancellationToken cancellationToken)
+        {
+            await context.DebugAsync($"Text {context?.Context?.Activity?.Text}", cancellationToken);
+
+            if (context.Result is FoundChoice)
+            {
+                FoundChoice fc = (FoundChoice)context.Result;
+                TourCategory category = TourCategory.List;
+
+                switch (category)
+                {
+                    case TourCategory.List:
+                        category = TourCategory.List;
+                        break;
+
+                    case TourCategory.Query:
+                        category = TourCategory.Query;
+                        break;
+                }
+
+                return await context.BeginDialogAsync(nameof(TourGuideDialog), JsonConvert.SerializeObject(new { tourCategory = category }), cancellationToken);
+            }
+
+            return await context.EndDialogAsync();
         }
     }
 }

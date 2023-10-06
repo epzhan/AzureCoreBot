@@ -1,6 +1,7 @@
 ﻿using Microsoft.Bot.Builder;
 using Microsoft.Bot.Schema;
 using NuGet.Common;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -28,7 +29,10 @@ namespace CoreBot.Extensions
 
         private static async Task<ResourceResponse> LogAsync(this ITurnContext context, LogLevel logLevel, string message, CancellationToken cancellationToken = default, [CallerMemberName] string label = null, [CallerFilePath] string filelabel = null)
         {
-            return await context.SendActivityAsync(MessageFactory.Text(message), cancellationToken).ConfigureAwait(false);
+            string objectname = Path.GetFileNameWithoutExtension(filelabel);
+            string logmessage = $"[{logLevel.ToString()}] {System.Reflection.Assembly.GetEntryAssembly().GetName().Name} ## {objectname}.{label} ## TEXT = {message}";
+
+            return await context.SendActivityAsync(MessageFactory.Text(logmessage), cancellationToken).ConfigureAwait(false);
         }
     }
 }

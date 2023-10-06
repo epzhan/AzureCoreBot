@@ -3,7 +3,7 @@
 //
 // Generated with Bot Builder V4 SDK Template for Visual Studio CoreBot v4.18.1
 
-namespace CoreBot
+namespace CoreBot.Model
 {
     public class BookingDetails
     {
